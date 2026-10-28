@@ -1,28 +1,40 @@
-name: 每日更新日期
+name: Daily date update
 
 on:
   schedule:
-    - cron: "17 1 * * *" # UTC 01:17 = 北京时间 09:17（避开整点高峰，延迟也不会跨天）
-  workflow_dispatch: # 允许在 Actions 页面手动触发
+    # GitHub delays scheduled runs (often by hours) and sometimes drops them, so
+    # several morning triggers are set; the first one to run writes the date and
+    # the rest exit as already updated. Beijing time 06:17 / 07:17 / 08:17 / 09:17.
+    - cron: "17 22 * * *"
+    - cron: "17 23 * * *"
+    - cron: "17 0 * * *"
+    - cron: "17 1 * * *"
+  workflow_dispatch: # allows a manual run from the Actions page
 
 permissions:
   contents: write
+
+# Delayed triggers can fire together; run them one at a time so the later ones
+# see the earlier commit instead of failing to push.
+concurrency:
+  group: daily-date-update
+  cancel-in-progress: false
 
 jobs:
   update:
     runs-on: ubuntu-latest
     env:
-      TZ: Asia/Shanghai # 日期和提交时间都按北京时间，贡献图按提交里的时区计日
+      TZ: Asia/Shanghai # date and commit time in Beijing time; the contribution graph uses the commit's time zone
     steps:
       - uses: actions/checkout@v7
 
-      - name: 写入今天日期并提交
+      - name: Write today's date and commit
         run: |
           today=$(date +%F)
-          printf '# 每日记录\n\n今天：%s\n' "$today" > README.md
+          printf '# Daily log\n\nToday: %s\n' "$today" > README.md
           git config user.name "Dragolone"
           git config user.email "160818051+Dragolone@users.noreply.github.com"
           git add README.md
-          git diff --cached --quiet && { echo "今天已更新过"; exit 0; }
-          git commit -m "更新日期 $today"
+          git diff --cached --quiet && { echo "Already updated today"; exit 0; }
+          git commit -m "Update date $today"
           git push
